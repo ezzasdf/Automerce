@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Page,
   Layout,
@@ -13,30 +14,81 @@ import {
   Banner,
   Badge,
   HorizontalStack,
+  Spinner,
 } from "@shopify/polaris";
 
-export default function SettingsPage() {
-  const [shopName, setShopName] = useState("My Shopify Store");
-  const [returnPolicy, setReturnPolicy] = useState("30-day return policy for unused items in original packaging.");
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const shopDomain = searchParams.get("shop") || "";
+
+  const [shopName, setShopName] = useState("");
+  const [returnPolicy, setReturnPolicy] = useState("");
   const [aiEnabled, setAiEnabled] = useState(true);
   const [autoRespond, setAutoRespond] = useState(false);
   const [notifyOnNewTicket, setNotifyOnNewTicket] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(true);
   const [shopifySyncEnabled, setShopifySyncEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
 
-  function handleSave() {
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  useEffect(() => {
+    async function loadSettings() {
+      if (!shopDomain) {
+        setLoading(false);
+        return;
+      }
+      try {
+        const res = await fetch(`/api/settings?shop=${shopDomain}`);
+        const data = await res.json();
+        if (data.settings) {
+          setShopName(data.settings.shopName || "");
+          setReturnPolicy(data.settings.returnPolicy || "");
+          setAiEnabled(data.settings.aiEnabled);
+          setAutoRespond(data.settings.autoRespond);
+          setNotifyOnNewTicket(data.settings.notifyOnNewTicket);
+          setEmailEnabled(data.settings.emailEnabled);
+          setShopifySyncEnabled(data.settings.shopifySyncEnabled);
+        }
+      } catch (err) {
+        console.error("Failed to load settings:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadSettings();
+  }, [shopDomain]);
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          shopDomain,
+          shop_name: shopName,
+          return_policy: returnPolicy,
+          ai_enabled: aiEnabled,
+          auto_respond: autoRespond,
+          notify_on_ticket: notifyOnNewTicket,
+          email_enabled: emailEnabled,
+          shopify_sync_enabled: shopifySyncEnabled,
+        }),
+      });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (err) {
+      console.error("Failed to save settings:", err);
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleShopifySync() {
-    const params = new URLSearchParams(window.location.search);
-    const shopDomain = params.get("shop") || "";
     if (!shopDomain) return;
-
     setSyncing(true);
     setSyncResult(null);
     try {
@@ -56,6 +108,18 @@ export default function SettingsPage() {
     } finally {
       setSyncing(false);
     }
+  }
+
+  if (loading) {
+    return (
+      <Page title="Settings">
+        <LegacyCard>
+          <div style={{ padding: "40px", textAlign: "center" }}>
+            <Spinner size="large" />
+          </div>
+        </LegacyCard>
+      </Page>
+    );
   }
 
   return (
@@ -85,7 +149,7 @@ export default function SettingsPage() {
                   helpText="This is used by the AI to assess refund eligibility"
                   autoComplete="off"
                 />
-                <Button primary onClick={handleSave}>Save Changes</Button>
+                <Button primary onClick={handleSave} loading={saving}>Save Changes</Button>
               </VerticalStack>
             </div>
           </LegacyCard>
@@ -100,17 +164,19 @@ export default function SettingsPage() {
                     onChange={setAiEnabled}
                   />
                   <Checkbox
-                    label="Auto-send AI responses (without review)"
+                    label="Auto-send AI responses without review"
                     checked={autoRespond}
                     onChange={setAutoRespond}
+                    helpText="When enabled, AI replies are sent immediately to customers via email. Disable to queue responses for your review."
                   />
-                  <Banner status="info">
-                    <Text variant="bodySm" as="span">
-                      When enabled, AI will generate responses for new tickets.
-                      With auto-send off, responses will be queued for your review.
-                    </Text>
-                  </Banner>
-                  <Button primary onClick={handleSave}>Save Changes</Button>
+                  {autoRespond && (
+                    <Banner status="warning">
+                      <Text variant="bodySm" as="span">
+                        Auto-respond is ON. AI will reply to new tickets and emails immediately without your review.
+                      </Text>
+                    </Banner>
+                  )}
+                  <Button primary onClick={handleSave} loading={saving}>Save Changes</Button>
                 </VerticalStack>
               </div>
             </LegacyCard>
@@ -127,39 +193,33 @@ export default function SettingsPage() {
                   onChange={setEmailEnabled}
                 />
                 {emailEnabled && (
-                  <>
-                    <LegacyCard>
-                      <div style={{ padding: "16px" }}>
-                        <VerticalStack gap="200">
-                          <Text variant="bodyMd" as="span" fontWeight="bold">
-                            Webhook URL
-                          </Text>
-                          <Text variant="bodySm" as="span" color="subdued">
-                            Configure your email service to forward inbound emails to this URL:
-                          </Text>
-                          <div style={{
-                            padding: "12px",
-                            backgroundColor: "#f6f6f7",
-                            borderRadius: "8px",
-                            fontFamily: "monospace",
-                            fontSize: "13px",
-                            wordBreak: "break-all",
-                          }}>
-                            https://automerce.vercel.app/api/webhooks/email
-                          </div>
-                          <Text variant="bodySm" as="span" color="subdued">
-                            Supported services: SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound
-                          </Text>
-                        </VerticalStack>
-                      </div>
-                    </LegacyCard>
-                    <Text variant="bodySm" as="span" color="subdued">
-                      Inbound emails are automatically converted to support tickets.
-                      The sender&apos;s email is matched to existing customers and orders.
-                    </Text>
-                  </>
+                  <LegacyCard>
+                    <div style={{ padding: "16px" }}>
+                      <VerticalStack gap="200">
+                        <Text variant="bodyMd" as="span" fontWeight="bold">
+                          Webhook URL
+                        </Text>
+                        <Text variant="bodySm" as="span" color="subdued">
+                          Configure your email service to forward inbound emails to this URL:
+                        </Text>
+                        <div style={{
+                          padding: "12px",
+                          backgroundColor: "#f6f6f7",
+                          borderRadius: "8px",
+                          fontFamily: "monospace",
+                          fontSize: "13px",
+                          wordBreak: "break-all",
+                        }}>
+                          https://automerce.vercel.app/api/webhooks/email
+                        </div>
+                        <Text variant="bodySm" as="span" color="subdued">
+                          Supported: SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound
+                        </Text>
+                      </VerticalStack>
+                    </div>
+                  </LegacyCard>
                 )}
-                <Button primary onClick={handleSave}>Save Changes</Button>
+                <Button primary onClick={handleSave} loading={saving}>Save Changes</Button>
               </VerticalStack>
             </div>
           </LegacyCard>
@@ -175,9 +235,7 @@ export default function SettingsPage() {
                   />
                   {shopifySyncEnabled && (
                     <HorizontalStack gap="200" align="center">
-                      <Button onClick={handleShopifySync} loading={syncing}>
-                        Sync Now
-                      </Button>
+                      <Button onClick={handleShopifySync} loading={syncing}>Sync Now</Button>
                       {syncResult && (
                         <Badge status={syncResult.includes("failed") ? "critical" : "success"}>
                           {syncResult}
@@ -185,11 +243,7 @@ export default function SettingsPage() {
                       )}
                     </HorizontalStack>
                   )}
-                  <Text variant="bodySm" as="span" color="subdued">
-                    Pulls order notes and customer conversations from Shopify
-                    and creates support tickets. Run manually or set up a cron job.
-                  </Text>
-                  <Button primary onClick={handleSave}>Save Changes</Button>
+                  <Button primary onClick={handleSave} loading={saving}>Save Changes</Button>
                 </VerticalStack>
               </div>
             </LegacyCard>
@@ -204,7 +258,7 @@ export default function SettingsPage() {
                     checked={notifyOnNewTicket}
                     onChange={setNotifyOnNewTicket}
                   />
-                  <Button primary onClick={handleSave}>Save Changes</Button>
+                  <Button primary onClick={handleSave} loading={saving}>Save Changes</Button>
                 </VerticalStack>
               </div>
             </LegacyCard>
@@ -218,7 +272,7 @@ export default function SettingsPage() {
                     API keys are configured as environment variables in Vercel.
                   </Text>
                   <Text variant="bodySm" as="span" color="subdued">
-                    To update your API keys, go to your Vercel dashboard and edit the environment variables.
+                    To update, edit environment variables in your Vercel dashboard.
                   </Text>
                 </VerticalStack>
               </div>
@@ -227,5 +281,13 @@ export default function SettingsPage() {
         </Layout.Section>
       </Layout>
     </Page>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }

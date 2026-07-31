@@ -1,7 +1,8 @@
 import { getSupabaseClient } from "@/lib/supabase";
 import { getShopByDomain } from "@/lib/db/shops";
-import { getTicketsByShopId } from "@/lib/db/tickets";
-import { categorizeTicket } from "@/lib/ai/support-engine";
+import { categorizeTicket, generateSupportResponse } from "@/lib/ai/support-engine";
+import { addTicketMessage, updateTicket, getTicketById, getTicketMessages } from "@/lib/db/tickets";
+import { getOrderById } from "@/lib/db/orders";
 import type { InboundEmail } from "./parse";
 import { parseInboundEmail } from "./parse";
 
@@ -23,9 +24,10 @@ export async function processInboundEmail(rawEmail: InboundEmail) {
 
   // Check if this is a reply to an existing ticket
   if (parsed.inReplyTo || parsed.references.length > 0) {
-    const existingTicket = await findTicketByMessageId(db, shop.id, parsed.inReplyTo, parsed.references);
-    if (existingTicket) {
-      return await addMessageToExistingTicket(db, existingTicket, parsed);
+    const existingTicketId = await findTicketByMessageId(db, shop.id, parsed.inReplyTo, parsed.references);
+    if (existingTicketId) {
+      const result = await addMessageToExistingTicket(db, existingTicketId, parsed, shop.auto_respond);
+      return result;
     }
   }
 
@@ -79,32 +81,58 @@ export async function processInboundEmail(rawEmail: InboundEmail) {
   }
 
   console.log(`[Email] Created ticket ${ticket.id} from ${parsed.customerEmail}`);
+
+  // Auto-respond if enabled
+  if (shop.auto_respond && shop.ai_enabled) {
+    try {
+      await autoRespondToTicket(ticket.id, shop);
+    } catch (err) {
+      console.error("[Email] Auto-respond failed:", err);
+    }
+  }
+
   return { success: true, ticketId: ticket.id };
 }
 
-async function findTicketByMessageId(
-  db: any,
-  shopId: string,
-  inReplyTo: string | null,
-  references: string[]
-): Promise<string | null> {
-  if (!inReplyTo && references.length === 0) return null;
+async function autoRespondToTicket(ticketId: string, shop: any) {
+  const ticket = await getTicketById(ticketId);
+  if (!ticket) return;
 
-  const messageIds = [inReplyTo, ...references].filter(Boolean);
+  let order = null;
+  if (ticket.order_id) {
+    order = await getOrderById(ticket.order_id);
+  }
 
-  const { data } = await db
-    .from("ticket_messages")
-    .select("ticket_id")
-    .in("content", messageIds)
-    .limit(1);
+  const messages = await getTicketMessages(ticketId);
 
-  return data?.[0]?.ticket_id || null;
+  const aiResponse = await generateSupportResponse({
+    ticket,
+    order,
+    messages,
+    shopName: shop.shop_name || shop.shopify_domain.replace(".myshopify.com", ""),
+    shopPolicies: shop.return_policy || "Standard 30-day return policy.",
+  });
+
+  await updateTicket(ticketId, {
+    ai_response: aiResponse,
+    ai_responded_at: new Date().toISOString(),
+    status: "pending",
+  });
+
+  await addTicketMessage({
+    ticket_id: ticketId,
+    sender_type: "ai",
+    content: aiResponse,
+  });
+
+  console.log(`[Email] Auto-responded to ticket ${ticketId}`);
 }
 
 async function addMessageToExistingTicket(
   db: any,
   ticketId: string,
-  parsed: { customerEmail: string; body: string }
+  parsed: { customerEmail: string; body: string },
+  autoRespond: boolean
 ) {
   const { error } = await db
     .from("ticket_messages")
@@ -128,7 +156,44 @@ async function addMessageToExistingTicket(
     .eq("status", "resolved");
 
   console.log(`[Email] Added reply to ticket ${ticketId}`);
+
+  // Auto-respond if enabled
+  if (autoRespond) {
+    try {
+      const ticket = await getTicketById(ticketId);
+      if (ticket) {
+        const shop = await getShopByDomain(
+          (await db.from("shops").select("shopify_domain").eq("id", ticket.shop_id).single()).data?.shopify_domain
+        );
+        if (shop?.ai_enabled) {
+          await autoRespondToTicket(ticketId, shop);
+        }
+      }
+    } catch (err) {
+      console.error("[Email] Auto-respond on reply failed:", err);
+    }
+  }
+
   return { success: true, ticketId };
+}
+
+async function findTicketByMessageId(
+  db: any,
+  shopId: string,
+  inReplyTo: string | null,
+  references: string[]
+): Promise<string | null> {
+  if (!inReplyTo && references.length === 0) return null;
+
+  const messageIds = [inReplyTo, ...references].filter(Boolean);
+
+  const { data } = await db
+    .from("ticket_messages")
+    .select("ticket_id")
+    .in("content", messageIds)
+    .limit(1);
+
+  return data?.[0]?.ticket_id || null;
 }
 
 async function findLinkedOrderId(

@@ -24,6 +24,13 @@ export async function GET(request: NextRequest) {
         access_token: accessToken,
         scope: session.scope || "",
         is_active: true,
+        auto_respond: false,
+        ai_enabled: true,
+        notify_on_ticket: true,
+        return_policy: "30-day return policy for unused items in original packaging.",
+        shop_name: "",
+        email_enabled: true,
+        shopify_sync_enabled: true,
       });
     }
 

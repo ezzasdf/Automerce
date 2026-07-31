@@ -4,6 +4,13 @@ export interface Shop {
   access_token: string;
   scope: string;
   is_active: boolean;
+  auto_respond: boolean;
+  ai_enabled: boolean;
+  notify_on_ticket: boolean;
+  return_policy: string;
+  shop_name: string;
+  email_enabled: boolean;
+  shopify_sync_enabled: boolean;
   installed_at: string;
   updated_at: string;
 }
