@@ -1,10 +1,9 @@
-import "@shopify/shopify-api/adapters/node";
-import { shopifyApi, ApiVersion } from "@shopify/shopify-api";
-
-let _shopify: ReturnType<typeof shopifyApi> | null = null;
+let _shopify: any = null;
 
 function getShopify() {
   if (!_shopify) {
+    const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
+    require("@shopify/shopify-api/adapters/node");
     _shopify = shopifyApi({
       apiKey: process.env.SHOPIFY_API_KEY!,
       apiSecretKey: process.env.SHOPIFY_API_SECRET!,
