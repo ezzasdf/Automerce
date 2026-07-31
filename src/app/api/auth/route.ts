@@ -4,7 +4,6 @@ import { getShopByDomain } from "@/lib/db/shops";
 
 // Lazy load shopify to avoid build-time initialization
 function getShopify() {
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
   require("@shopify/shopify-api/adapters/node");
   return shopifyApi({
