@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getShopByDomain } from "@/lib/db/shops";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -16,24 +16,23 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
     }
 
-    // Get counts in parallel
+    const db = getSupabaseClient();
+
     const [ordersResult, ticketsResult, refundResult, resolvedResult] = await Promise.all([
-      supabase.from("orders").select("id", { count: "exact", head: true }).eq("shop_id", shop.id),
-      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "open"),
-      supabase.from("refund_logs").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "pending"),
-      supabase.from("tickets").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "resolved"),
+      db.from("orders").select("id", { count: "exact", head: true }).eq("shop_id", shop.id),
+      db.from("tickets").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "open"),
+      db.from("refund_logs").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "pending"),
+      db.from("tickets").select("id", { count: "exact", head: true }).eq("shop_id", shop.id).eq("status", "resolved"),
     ]);
 
-    // Get recent tickets
-    const { data: recentTickets } = await supabase
+    const { data: recentTickets } = await db
       .from("tickets")
       .select("id, subject, status, category, created_at")
       .eq("shop_id", shop.id)
       .order("created_at", { ascending: false })
       .limit(5);
 
-    // Get recent refund logs
-    const { data: recentRefunds } = await supabase
+    const { data: recentRefunds } = await db
       .from("refund_logs")
       .select("id, amount, status, refund_type, processed_at")
       .eq("shop_id", shop.id)

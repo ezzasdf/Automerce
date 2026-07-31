@@ -1,8 +1,8 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { RefundRule, RefundLog } from "@/types";
 
 export async function getRefundRulesByShopId(shopId: string): Promise<RefundRule[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("refund_rules")
     .select("*")
     .eq("shop_id", shopId)
@@ -13,7 +13,7 @@ export async function getRefundRulesByShopId(shopId: string): Promise<RefundRule
 }
 
 export async function getRefundRuleById(ruleId: string): Promise<RefundRule | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("refund_rules")
     .select("*")
     .eq("id", ruleId)
@@ -24,7 +24,7 @@ export async function getRefundRuleById(ruleId: string): Promise<RefundRule | nu
 }
 
 export async function createRefundRule(rule: Omit<RefundRule, "id" | "created_at">): Promise<RefundRule> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("refund_rules")
     .insert(rule)
     .select()
@@ -38,7 +38,7 @@ export async function updateRefundRule(
   ruleId: string,
   updates: Partial<Omit<RefundRule, "id" | "created_at">>
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from("refund_rules")
     .update(updates)
     .eq("id", ruleId);
@@ -47,7 +47,7 @@ export async function updateRefundRule(
 }
 
 export async function deleteRefundRule(ruleId: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from("refund_rules")
     .delete()
     .eq("id", ruleId);
@@ -56,7 +56,7 @@ export async function deleteRefundRule(ruleId: string): Promise<void> {
 }
 
 export async function createRefundLog(log: Omit<RefundLog, "id" | "processed_at">): Promise<RefundLog> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("refund_logs")
     .insert(log)
     .select()
@@ -70,7 +70,7 @@ export async function updateRefundLog(
   logId: string,
   updates: Partial<Pick<RefundLog, "shopify_refund_id" | "status">>
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from("refund_logs")
     .update(updates)
     .eq("id", logId);
@@ -79,7 +79,7 @@ export async function updateRefundLog(
 }
 
 export async function getRefundLogsByShopId(shopId: string, limit = 50): Promise<RefundLog[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("refund_logs")
     .select("*")
     .eq("shop_id", shopId)

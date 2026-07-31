@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { Ticket, TicketMessage, TicketStatus } from "@/types";
 
 export async function createTicket(ticket: {
@@ -11,7 +11,7 @@ export async function createTicket(ticket: {
   category?: string;
   priority?: string;
 }): Promise<Ticket> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("tickets")
     .insert({
       shop_id: ticket.shop_id,
@@ -35,7 +35,7 @@ export async function getTicketsByShopId(
   status?: string,
   limit = 50
 ): Promise<Ticket[]> {
-  let query = supabase
+  let query = getSupabaseClient()
     .from("tickets")
     .select("*")
     .eq("shop_id", shopId);
@@ -53,7 +53,7 @@ export async function getTicketsByShopId(
 }
 
 export async function getTicketById(ticketId: string): Promise<Ticket | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("tickets")
     .select("*")
     .eq("id", ticketId)
@@ -75,7 +75,7 @@ export async function updateTicket(
     resolved_at: string;
   }>
 ): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from("tickets")
     .update(updates)
     .eq("id", ticketId);
@@ -89,7 +89,7 @@ export async function addTicketMessage(message: {
   sender_email?: string;
   content: string;
 }): Promise<TicketMessage> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("ticket_messages")
     .insert({
       ticket_id: message.ticket_id,
@@ -105,7 +105,7 @@ export async function addTicketMessage(message: {
 }
 
 export async function getTicketMessages(ticketId: string): Promise<TicketMessage[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("ticket_messages")
     .select("*")
     .eq("ticket_id", ticketId)

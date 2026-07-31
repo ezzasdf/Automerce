@@ -1,8 +1,8 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { Shop } from "@/types";
 
 export async function getShopByDomain(domain: string): Promise<Shop | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("shops")
     .select("*")
     .eq("shopify_domain", domain)
@@ -13,7 +13,7 @@ export async function getShopByDomain(domain: string): Promise<Shop | null> {
 }
 
 export async function createShop(shop: Omit<Shop, "id" | "installed_at" | "updated_at">): Promise<Shop> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("shops")
     .insert(shop)
     .select()
@@ -24,7 +24,7 @@ export async function createShop(shop: Omit<Shop, "id" | "installed_at" | "updat
 }
 
 export async function updateShopAccessToken(domain: string, accessToken: string, scope: string): Promise<void> {
-  const { error } = await supabase
+  const { error } = await getSupabaseClient()
     .from("shops")
     .update({ access_token: accessToken, scope, updated_at: new Date().toISOString() })
     .eq("shopify_domain", domain);

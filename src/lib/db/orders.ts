@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { getSupabaseClient } from "@/lib/supabase";
 import type { Order, WebhookOrder } from "@/types";
 
 export async function upsertOrder(shopId: string, webhookOrder: WebhookOrder): Promise<Order> {
@@ -27,7 +27,7 @@ export async function upsertOrder(shopId: string, webhookOrder: WebhookOrder): P
     synced_at: new Date().toISOString(),
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("orders")
     .upsert(orderData, { onConflict: "shopify_order_id" })
     .select()
@@ -38,7 +38,7 @@ export async function upsertOrder(shopId: string, webhookOrder: WebhookOrder): P
 }
 
 export async function getOrdersByShopId(shopId: string, limit = 50): Promise<Order[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("orders")
     .select("*")
     .eq("shop_id", shopId)
@@ -50,7 +50,7 @@ export async function getOrdersByShopId(shopId: string, limit = 50): Promise<Ord
 }
 
 export async function getOrderById(orderId: string): Promise<Order | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("orders")
     .select("*")
     .eq("id", orderId)
@@ -61,7 +61,7 @@ export async function getOrderById(orderId: string): Promise<Order | null> {
 }
 
 export async function getOrderByShopifyId(shopifyOrderId: string): Promise<Order | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("orders")
     .select("*")
     .eq("shopify_order_id", shopifyOrderId)
@@ -72,7 +72,7 @@ export async function getOrderByShopifyId(shopifyOrderId: string): Promise<Order
 }
 
 export async function searchOrdersByEmail(shopId: string, email: string): Promise<Order[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabaseClient()
     .from("orders")
     .select("*")
     .eq("shop_id", shopId)
