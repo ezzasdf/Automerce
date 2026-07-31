@@ -16,6 +16,21 @@ export function getShopify() {
   return _shopify;
 }
 
+export function buildAuthUrl(shopDomain: string, state: string): string {
+  const apiKey = process.env.SHOPIFY_API_KEY!;
+  const scopes = process.env.SHOPIFY_SCOPES || "read_orders,write_orders,read_customers";
+  const redirectUri = `${process.env.SHOPIFY_APP_URL}/api/auth/callback`;
+
+  const params = new URLSearchParams({
+    client_id: apiKey,
+    scope: scopes,
+    redirect_uri: redirectUri,
+    state,
+  });
+
+  return `https://${shopDomain}/admin/oauth/authorize?${params.toString()}`;
+}
+
 export function getShopifyClient(accessToken: string, shopDomain: string) {
   const shopify = getShopify();
   return new shopify.clients.Graphql({

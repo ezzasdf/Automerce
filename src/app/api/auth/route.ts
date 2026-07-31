@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getShopify } from "@/lib/shopify";
+import { buildAuthUrl } from "@/lib/shopify";
 import { getShopByDomain } from "@/lib/db/shops";
+import crypto from "crypto";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -25,15 +26,24 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(dashboardUrl);
     }
 
-    const shopify = getShopify();
-    const authRoute = await shopify.auth.begin({
-      shop: shopDomain,
-      callbackPath: "/api/auth/callback",
-      isOnline: true,
-      rawRequest: request as any,
+    const state = crypto.randomBytes(16).toString("hex");
+    const authUrl = buildAuthUrl(shopDomain, state);
+
+    const response = NextResponse.redirect(authUrl);
+    response.cookies.set("shopify_oauth_state", state, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 600,
+    });
+    response.cookies.set("shopify_oauth_shop", shopDomain, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      maxAge: 600,
     });
 
-    return NextResponse.redirect(authRoute);
+    return response;
   } catch (error: any) {
     console.error("Auth error:", error);
     return NextResponse.json(
