@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
       success: true,
       synced: result.synced,
       errors: result.errors,
+      details: result.details,
     });
   } catch (error: any) {
     console.error("Shopify sync error:", error);

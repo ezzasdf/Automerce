@@ -20,13 +20,13 @@ interface ShopifyMessage {
 export async function syncShopifyConversations(
   admin: any,
   shopId: string
-): Promise<{ synced: number; errors: number }> {
+): Promise<{ synced: number; errors: number; details?: string }> {
   const db = getSupabaseClient();
   let synced = 0;
   let errors = 0;
+  let lastError = "";
 
   try {
-    // Fetch recent orders with customer info using GraphQL
     const ordersQuery = `
       query {
         orders(first: 50, sortKey: UPDATED_AT, reverse: true) {
@@ -43,129 +43,85 @@ export async function syncShopifyConversations(
       }
     `;
 
-    const ordersResponse = await admin.query({ data: { query: ordersQuery } });
+    let ordersResponse: any;
+    try {
+      ordersResponse = await admin.query({ data: { query: ordersQuery } });
+    } catch (qErr: any) {
+      lastError = `Orders query failed: ${qErr.message}`;
+      console.error("[Shopify Sync]", lastError);
+      errors++;
+      return { synced, errors, details: lastError };
+    }
+
     const orders = ordersResponse?.body?.data?.orders?.edges || [];
+    console.log(`[Shopify Sync] Found ${orders.length} orders`);
+
+    if (orders.length === 0) {
+      return { synced: 0, errors: 0, details: "No orders found in store" };
+    }
 
     for (const { node: order } of orders) {
       try {
-        // Fetch order notes and events
-        const eventsQuery = `
-          query {
-            order(id: "${order.id}") {
-              events(first: 25, sortKey: CREATED_AT, reverse: true) {
-                edges {
-                  node {
-                    id
-                    message
-                    createdAt
-                    author { name isSystem }
-                    ... on DraftOrderEvent { entry {
-                      ... on DraftOrderNotePayload { message }
-                    }}
-                  }
-                }
-              }
-              metafield(namespace: "support_auto", key: "ticket_id") { value }
-            }
-          }
-        `;
-
-        const eventsResponse = await admin.query({ data: { query: eventsQuery } });
-        const events = eventsResponse?.body?.data?.order?.events?.edges || [];
-
-        // Filter for customer-facing messages
-        const customerMessages = events
-          .filter((e: any) => e.node.message && !e.node.author?.isSystem)
-          .map((e: any) => ({
-            id: e.node.id,
-            body: e.node.message,
-            author: e.node.author?.name || "Staff",
-            createdAt: e.node.createdAt,
-            isCustomerMessage: false,
-          }));
-
-        if (customerMessages.length === 0) continue;
-
         const customerEmail = order.email || order.customer?.email || "";
         const customerName = order.customer
           ? `${order.customer.firstName} ${order.customer.lastName}`.trim()
           : "";
 
-        // Check if we already have a ticket for this order
+        if (!customerEmail) continue;
+
         const shopifyOrderId = order.id.split("/").pop();
         const { data: existingTicket } = await db
           .from("tickets")
           .select("id")
           .eq("shop_id", shopId)
-          .eq("customer_email", customerEmail)
           .ilike("subject", `%${order.name}%`)
           .limit(1)
           .single();
 
-        if (existingTicket) {
-          // Sync new messages only
-          const { data: existingMessages } = await db
-            .from("ticket_messages")
-            .select("content")
-            .eq("ticket_id", existingTicket.id);
+        if (existingTicket) continue;
 
-          const existingContents = new Set(existingMessages?.map((m) => m.content) || []);
+        const { data: ticket, error: insertErr } = await db
+          .from("tickets")
+          .insert({
+            shop_id: shopId,
+            order_id: shopifyOrderId,
+            customer_email: customerEmail,
+            customer_name: customerName || null,
+            subject: `Order ${order.name} — Customer Support`,
+            status: "open",
+            priority: "normal",
+            category: "inquiry",
+          })
+          .select()
+          .single();
 
-          for (const msg of customerMessages) {
-            if (!existingContents.has(msg.body)) {
-              await db.from("ticket_messages").insert({
-                ticket_id: existingTicket.id,
-                sender_type: "human",
-                sender_email: null,
-                content: msg.body,
-              });
-              synced++;
-            }
-          }
-        } else {
-          // Create new ticket from Shopify conversation
-          const { data: ticket, error } = await db
-            .from("tickets")
-            .insert({
-              shop_id: shopId,
-              order_id: null,
-              customer_email: customerEmail,
-              customer_name: customerName || null,
-              subject: `Order ${order.name} — Customer Support`,
-              status: "open",
-              priority: "normal",
-              category: "inquiry",
-            })
-            .select()
-            .single();
-
-          if (error || !ticket) {
-            errors++;
-            continue;
-          }
-
-          // Add messages
-          for (const msg of customerMessages.reverse()) {
-            await db.from("ticket_messages").insert({
-              ticket_id: ticket.id,
-              sender_type: "human",
-              sender_email: null,
-              content: `[${msg.author}] ${msg.body}`,
-            });
-          }
-          synced++;
+        if (insertErr || !ticket) {
+          console.error(`[Shopify Sync] Ticket insert error for ${order.name}:`, insertErr);
+          errors++;
+          continue;
         }
-      } catch (err) {
+
+        await db.from("ticket_messages").insert({
+          ticket_id: ticket.id,
+          sender_type: "system",
+          sender_email: null,
+          content: `Order ${order.name} synced from Shopify (updated: ${order.updatedAt})`,
+        });
+
+        synced++;
+      } catch (err: any) {
         console.error(`[Shopify Sync] Error processing order ${order.name}:`, err);
+        lastError = err.message;
         errors++;
       }
     }
-  } catch (err) {
-    console.error("[Shopify Sync] Error fetching conversations:", err);
+  } catch (err: any) {
+    console.error("[Shopify Sync] Error fetching orders:", err);
+    lastError = err.message;
     errors++;
   }
 
-  return { synced, errors };
+  return { synced, errors, details: lastError || undefined };
 }
 
 export async function sendShopifyNotification(
@@ -175,7 +131,6 @@ export async function sendShopifyNotification(
   subject?: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Add as order note (internal)
     const noteMutation = `
       mutation orderUpdate($input: OrderInput!) {
         orderUpdate(input: $input) {
@@ -218,7 +173,6 @@ export async function sendCustomerEmail(
   body: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    // Use Shopify's order notification email
     const emailMutation = `
       mutation orderUpdate($input: OrderInput!) {
         orderUpdate(input: $input) {
