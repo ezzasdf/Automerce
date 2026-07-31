@@ -1,18 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getShopify } from "@/lib/shopify";
 import { getShopByDomain, createShop, updateShopAccessToken } from "@/lib/db/shops";
-
-function getShopify() {
-  const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
-  require("@shopify/shopify-api/adapters/node");
-  return shopifyApi({
-    apiKey: process.env.SHOPIFY_API_KEY!,
-    apiSecretKey: process.env.SHOPIFY_API_SECRET!,
-    scopes: (process.env.SHOPIFY_SCOPES || "read_orders,write_orders,read_customers").split(","),
-    hostName: (process.env.SHOPIFY_APP_URL || "http://localhost:3000").replace(/https?:\/\//, ""),
-    apiVersion: ApiVersion.October24,
-    isEmbeddedApp: true,
-  });
-}
 
 export async function GET(request: NextRequest) {
   try {

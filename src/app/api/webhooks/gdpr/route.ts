@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyWebhook } from "@/lib/webhook-utils";
-import crypto from "crypto";
+import { getShopByDomain } from "@/lib/db/shops";
+import { getSupabaseClient } from "@/lib/supabase";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
@@ -16,30 +17,53 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid HMAC" }, { status: 401 });
   }
 
-  const payload = JSON.parse(body);
+  let payload: any;
+  try {
+    payload = JSON.parse(body);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const db = getSupabaseClient();
 
   switch (topic) {
     case "customers/data-request":
-      // GDPR: Respond with customer data within 30 days
       console.log(`[GDPR] Data request for customer ${payload.customer?.id} on ${shopDomain}`);
-      // In production: collect all customer data and email to store owner
       break;
 
     case "customers/redact":
-      // GDPR: Delete customer data within 30 days
       console.log(`[GDPR] Data redaction for customer ${payload.customer?.id} on ${shopDomain}`);
-      // In production: delete customer data from your database
       break;
 
     case "shop/redact":
-      // GDPR: Delete shop data within 30 days of uninstall
       console.log(`[GDPR] Shop data redaction for ${shopDomain}`);
-      // In production: delete all shop data from your database
+      try {
+        const shop = await getShopByDomain(shopDomain);
+        if (shop) {
+          await db.from("refund_logs").delete().eq("shop_id", shop.id);
+          await db.from("refund_rules").delete().eq("shop_id", shop.id);
+          await db.from("ticket_messages").delete().in("ticket_id",
+            (await db.from("tickets").select("id").eq("shop_id", shop.id)).data?.map((t: any) => t.id) || []
+          );
+          await db.from("tickets").delete().eq("shop_id", shop.id);
+          await db.from("orders").delete().eq("shop_id", shop.id);
+          await db.from("shops").delete().eq("id", shop.id);
+        }
+      } catch (err) {
+        console.error("[GDPR] Shop redaction error:", err);
+      }
       break;
 
     case "app/uninstalled":
       console.log(`[App] App uninstalled from ${shopDomain}`);
-      // In production: mark shop as inactive, clean up data
+      try {
+        const shop = await getShopByDomain(shopDomain);
+        if (shop) {
+          await db.from("shops").update({ is_active: false }).eq("id", shop.id);
+        }
+      } catch (err) {
+        console.error("[App] Deactivation error:", err);
+      }
       break;
 
     case "app/scopes_update":

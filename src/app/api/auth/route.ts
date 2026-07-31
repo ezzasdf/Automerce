@@ -1,20 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getShopifyClient } from "@/lib/shopify";
+import { getShopify } from "@/lib/shopify";
 import { getShopByDomain } from "@/lib/db/shops";
-
-// Lazy load shopify to avoid build-time initialization
-function getShopify() {
-  const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
-  require("@shopify/shopify-api/adapters/node");
-  return shopifyApi({
-    apiKey: process.env.SHOPIFY_API_KEY!,
-    apiSecretKey: process.env.SHOPIFY_API_SECRET!,
-    scopes: (process.env.SHOPIFY_SCOPES || "read_orders,write_orders,read_customers").split(","),
-    hostName: (process.env.SHOPIFY_APP_URL || "http://localhost:3000").replace(/https?:\/\//, ""),
-    apiVersion: ApiVersion.October24,
-    isEmbeddedApp: true,
-  });
-}
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -25,6 +11,10 @@ export async function GET(request: NextRequest) {
   }
 
   const shopDomain = shop.includes(".myshopify.com") ? shop : `${shop}.myshopify.com`;
+
+  if (!/^[a-z0-9-]+\.myshopify\.com$/.test(shopDomain)) {
+    return NextResponse.json({ error: "Invalid shop domain" }, { status: 400 });
+  }
 
   try {
     const existingShop = await getShopByDomain(shopDomain);

@@ -15,6 +15,7 @@ import {
   Modal,
   TextField,
   Checkbox,
+  Banner,
 } from "@shopify/polaris";
 
 interface RefundRule {
@@ -61,7 +62,9 @@ function RefundsContent() {
   const [rules, setRules] = useState<RefundRule[]>([]);
   const [refundLogs, setRefundLogs] = useState<RefundLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [createModalOpen, setCreateModalOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const [newRule, setNewRule] = useState({
     name: "",
     maxAmount: "",
@@ -76,6 +79,7 @@ function RefundsContent() {
 
   async function fetchData() {
     setLoading(true);
+    setError(null);
     try {
       if (activeTab === "rules") {
         const res = await fetch(`/api/refunds/rules?shop=${shopDomain}`);
@@ -87,15 +91,17 @@ function RefundsContent() {
         setRefundLogs(data.logs || []);
       }
     } catch (err) {
-      console.error("Failed to fetch data:", err);
+      setError("Failed to load data");
     } finally {
       setLoading(false);
     }
   }
 
   async function handleCreateRule() {
+    if (!newRule.name) return;
+    setCreating(true);
     try {
-      await fetch("/api/refunds/rules", {
+      const res = await fetch("/api/refunds/rules", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -114,16 +120,39 @@ function RefundsContent() {
           },
         }),
       });
-      setCreateModalOpen(false);
-      setNewRule({ name: "", maxAmount: "", daysLimit: "", autoRefund: true });
+      if (res.ok) {
+        setCreateModalOpen(false);
+        setNewRule({ name: "", maxAmount: "", daysLimit: "", autoRefund: true });
+        await fetchData();
+      }
+    } catch (err) {
+      setError("Failed to create rule");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDeleteRule(ruleId: string) {
+    try {
+      await fetch(`/api/refunds/rules?id=${ruleId}&shop=${shopDomain}`, {
+        method: "DELETE",
+      });
       await fetchData();
     } catch (err) {
-      console.error("Failed to create rule:", err);
+      setError("Failed to delete rule");
     }
   }
 
   return (
     <Page title="Refunds">
+      {error && (
+        <div style={{ marginBottom: "16px" }}>
+          <Banner status="critical" onDismiss={() => setError(null)}>
+            {error}
+          </Banner>
+        </div>
+      )}
+
       <LegacyCard>
         <div style={{ padding: "16px", borderBottom: "1px solid #e1e3e5" }}>
           <HorizontalStack gap="400">
@@ -152,40 +181,49 @@ function RefundsContent() {
           </LegacyCard>
         ) : activeTab === "history" ? (
           <LegacyCard>
-            <IndexTable
-              resourceName={{ singular: "refund", plural: "refunds" }}
-              itemCount={refundLogs.length}
-              headings={[
-                { title: "Amount" },
-                { title: "Type" },
-                { title: "Status" },
-                { title: "Reason" },
-                { title: "Date" },
-              ]}
-              selectable={false}
-            >
-              {refundLogs.map((log, index) => (
-                <IndexTable.Row key={log.id} id={log.id} position={index}>
-                  <IndexTable.Cell>
-                    <Text variant="bodyMd" as="span" fontWeight="bold">
-                      ${log.amount.toFixed(2)}
-                    </Text>
-                  </IndexTable.Cell>
-                  <IndexTable.Cell>{getTypeBadge(log.refund_type)}</IndexTable.Cell>
-                  <IndexTable.Cell>{getStatusBadge(log.status)}</IndexTable.Cell>
-                  <IndexTable.Cell>
-                    <Text variant="bodySm" as="span" color="subdued">
-                      {log.reason || "N/A"}
-                    </Text>
-                  </IndexTable.Cell>
-                  <IndexTable.Cell>
-                    <Text variant="bodySm" as="span" color="subdued">
-                      {new Date(log.processed_at).toLocaleDateString()}
-                    </Text>
-                  </IndexTable.Cell>
-                </IndexTable.Row>
-              ))}
-            </IndexTable>
+            {refundLogs.length === 0 ? (
+              <div style={{ padding: "40px", textAlign: "center" }}>
+                <Text variant="headingMd" as="h3">No refund history</Text>
+                <Text variant="bodyMd" as="p" color="subdued">
+                  Refunds will appear here once processed.
+                </Text>
+              </div>
+            ) : (
+              <IndexTable
+                resourceName={{ singular: "refund", plural: "refunds" }}
+                itemCount={refundLogs.length}
+                headings={[
+                  { title: "Amount" },
+                  { title: "Type" },
+                  { title: "Status" },
+                  { title: "Reason" },
+                  { title: "Date" },
+                ]}
+                selectable={false}
+              >
+                {refundLogs.map((log, index) => (
+                  <IndexTable.Row key={log.id} id={log.id} position={index}>
+                    <IndexTable.Cell>
+                      <Text variant="bodyMd" as="span" fontWeight="bold">
+                        ${log.amount.toFixed(2)}
+                      </Text>
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>{getTypeBadge(log.refund_type)}</IndexTable.Cell>
+                    <IndexTable.Cell>{getStatusBadge(log.status)}</IndexTable.Cell>
+                    <IndexTable.Cell>
+                      <Text variant="bodySm" as="span" color="subdued">
+                        {log.reason || "N/A"}
+                      </Text>
+                    </IndexTable.Cell>
+                    <IndexTable.Cell>
+                      <Text variant="bodySm" as="span" color="subdued">
+                        {new Date(log.processed_at).toLocaleDateString()}
+                      </Text>
+                    </IndexTable.Cell>
+                  </IndexTable.Row>
+                ))}
+              </IndexTable>
+            )}
           </LegacyCard>
         ) : (
           <LegacyCard
@@ -196,46 +234,48 @@ function RefundsContent() {
             }}
           >
             <div style={{ padding: "16px" }}>
-              <VerticalStack gap="400">
-                {rules.map((rule) => (
-                  <div
-                    key={rule.id}
-                    style={{
-                      padding: "16px",
-                      border: "1px solid #e1e3e5",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <VerticalStack gap="100">
-                        <HorizontalStack gap="100" align="center">
-                          <Text variant="bodyMd" as="span" fontWeight="bold">{rule.name}</Text>
-                          {rule.is_active ? (
-                            <Badge status="success">Active</Badge>
-                          ) : (
-                            <Badge>Inactive</Badge>
-                          )}
-                        </HorizontalStack>
-                        <Text variant="bodySm" as="span" color="subdued">
-                          {rule.conditions?.order_total_max && `Max $${rule.conditions.order_total_max}`}
-                          {rule.conditions?.days_since_delivery_max && ` | Within ${rule.conditions.days_since_delivery_max} days`}
-                          {rule.actions?.auto_refund && " | Auto-refund"}
-                        </Text>
-                      </VerticalStack>
-                      <HorizontalStack gap="100">
-                        <Button size="slim">Edit</Button>
-                        <Button size="slim" destructive>Delete</Button>
-                      </HorizontalStack>
-                    </div>
-                  </div>
-                ))}
-
-                {rules.length === 0 && (
-                  <Text variant="bodyMd" as="span" color="subdued" alignment="center">
-                    No automation rules configured yet. Create one to get started.
+              {rules.length === 0 ? (
+                <div style={{ padding: "20px", textAlign: "center" }}>
+                  <Text variant="headingMd" as="h3">No automation rules</Text>
+                  <Text variant="bodyMd" as="p" color="subdued">
+                    Create a rule to automate refund processing.
                   </Text>
-                )}
-              </VerticalStack>
+                </div>
+              ) : (
+                <VerticalStack gap="400">
+                  {rules.map((rule) => (
+                    <div
+                      key={rule.id}
+                      style={{
+                        padding: "16px",
+                        border: "1px solid #e1e3e5",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <VerticalStack gap="100">
+                          <HorizontalStack gap="100" align="center">
+                            <Text variant="bodyMd" as="span" fontWeight="bold">{rule.name}</Text>
+                            {rule.is_active ? (
+                              <Badge status="success">Active</Badge>
+                            ) : (
+                              <Badge>Inactive</Badge>
+                            )}
+                          </HorizontalStack>
+                          <Text variant="bodySm" as="span" color="subdued">
+                            {rule.conditions?.order_total_max && `Max $${rule.conditions.order_total_max}`}
+                            {rule.conditions?.days_since_delivery_max && ` | Within ${rule.conditions.days_since_delivery_max} days`}
+                            {rule.actions?.auto_refund && " | Auto-refund"}
+                          </Text>
+                        </VerticalStack>
+                        <Button size="slim" destructive onClick={() => handleDeleteRule(rule.id)}>
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </VerticalStack>
+              )}
             </div>
           </LegacyCard>
         )}
@@ -248,6 +288,7 @@ function RefundsContent() {
         primaryAction={{
           content: "Create",
           onAction: handleCreateRule,
+          loading: creating,
         }}
         secondaryActions={[
           { content: "Cancel", onAction: () => setCreateModalOpen(false) },

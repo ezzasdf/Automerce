@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   Page,
@@ -36,7 +36,7 @@ interface Ticket {
   order_id: string | null;
 }
 
-export default function TicketDetailPage({ params }: { params: { id: string } }) {
+function TicketDetailContent({ params }: { params: { id: string } }) {
   const searchParams = useSearchParams();
   const shopDomain = searchParams.get("shop") || "";
 
@@ -44,6 +44,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
   const [messages, setMessages] = useState<TicketMessage[]>([]);
   const [loading, setLoading] = useState(true);
   const [reply, setReply] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [processingRefund, setProcessingRefund] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -88,7 +89,8 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
   }
 
   async function handleSendReply() {
-    if (!reply.trim()) return;
+    if (!reply.trim() || sendingReply) return;
+    setSendingReply(true);
     try {
       await fetch(`/api/tickets/${params.id}`, {
         method: "PATCH",
@@ -102,6 +104,8 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
       await fetchTicket();
     } catch (err) {
       setError("Failed to send reply");
+    } finally {
+      setSendingReply(false);
     }
   }
 
@@ -162,7 +166,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
 
   if (!ticket) {
     return (
-      <Page title="Ticket Not Found">
+      <Page title="Ticket Not Found" backAction={{ content: "Tickets", url: `/tickets?shop=${shopDomain}` }}>
         <LegacyCard>
           <div style={{ padding: "20px" }}>
             <Text variant="bodyMd" as="span">This ticket could not be found.</Text>
@@ -248,9 +252,9 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
                     primary
                     onClick={handleProcessRefund}
                     loading={processingRefund}
-                    disabled={ticket.status === "resolved"}
+                    disabled={ticket.status === "resolved" || !ticket.order_id}
                   >
-                    Process Refund
+                    {ticket.order_id ? "Process Refund" : "No Order Linked"}
                   </Button>
                   <Button
                     fullWidth
@@ -280,7 +284,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
                     }}
                   >
                     <HorizontalStack gap="100" align="center">
-                      <Badge status={msg.sender_type === "customer" ? "info" : msg.sender_type === "ai" ? "success" : "attention"}>
+                      <Badge status={msg.sender_type === "customer" ? "attention" : msg.sender_type === "ai" ? "success" : "warning"}>
                         {msg.sender_type === "customer" ? "Customer" : msg.sender_type === "ai" ? "AI Agent" : "Support Agent"}
                       </Badge>
                       <Text variant="bodySm" as="span" color="subdued">
@@ -311,11 +315,9 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
                   autoComplete="off"
                 />
                 <div style={{ marginTop: "8px" }}>
-                  <HorizontalStack gap="100">
-                    <Button primary onClick={handleSendReply} disabled={!reply.trim()}>
-                      Send Reply
-                    </Button>
-                  </HorizontalStack>
+                  <Button primary onClick={handleSendReply} loading={sendingReply} disabled={!reply.trim()}>
+                    Send Reply
+                  </Button>
                 </div>
               </div>
             </div>
@@ -323,5 +325,13 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
         </div>
       </div>
     </Page>
+  );
+}
+
+export default function TicketDetailPage({ params }: { params: { id: string } }) {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <TicketDetailContent params={params} />
+    </Suspense>
   );
 }

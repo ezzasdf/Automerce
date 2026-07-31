@@ -1,6 +1,6 @@
 let _shopify: any = null;
 
-function getShopify() {
+export function getShopify() {
   if (!_shopify) {
     const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
     require("@shopify/shopify-api/adapters/node");

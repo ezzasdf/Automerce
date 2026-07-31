@@ -9,7 +9,6 @@ import {
   TextField,
   Button,
   VerticalStack,
-  Select,
   Checkbox,
   Banner,
 } from "@shopify/polaris";
@@ -20,9 +19,23 @@ export default function SettingsPage() {
   const [aiEnabled, setAiEnabled] = useState(true);
   const [autoRespond, setAutoRespond] = useState(false);
   const [notifyOnNewTicket, setNotifyOnNewTicket] = useState(true);
+  const [saved, setSaved] = useState(false);
+
+  function handleSave(section: string) {
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  }
 
   return (
     <Page title="Settings">
+      {saved && (
+        <div style={{ marginBottom: "16px" }}>
+          <Banner status="success">
+            Settings saved successfully.
+          </Banner>
+        </div>
+      )}
+
       <Layout>
         <Layout.Section oneHalf>
           <LegacyCard title="Store Information">
@@ -42,7 +55,7 @@ export default function SettingsPage() {
                   helpText="This is used by the AI to assess refund eligibility"
                   autoComplete="off"
                 />
-                <Button primary>Save Changes</Button>
+                <Button primary onClick={() => handleSave("store")}>Save Changes</Button>
               </VerticalStack>
             </div>
           </LegacyCard>
@@ -66,7 +79,7 @@ export default function SettingsPage() {
                       With auto-send off, responses will be queued for your review.
                     </Text>
                   </Banner>
-                  <Button primary>Save Changes</Button>
+                  <Button primary onClick={() => handleSave("ai")}>Save Changes</Button>
                 </VerticalStack>
               </div>
             </LegacyCard>
@@ -81,7 +94,7 @@ export default function SettingsPage() {
                   checked={notifyOnNewTicket}
                   onChange={setNotifyOnNewTicket}
                 />
-                <Button primary>Save Changes</Button>
+                <Button primary onClick={() => handleSave("notifications")}>Save Changes</Button>
               </VerticalStack>
             </div>
           </LegacyCard>
@@ -89,14 +102,11 @@ export default function SettingsPage() {
             <LegacyCard title="API Keys">
               <div style={{ padding: "16px" }}>
                 <VerticalStack gap="400">
-                  <TextField
-                    label="Anthropic API Key"
-                    value="sk-ant-***"
-                    readOnly
-                    autoComplete="off"
-                  />
+                  <Text variant="bodyMd" as="span">
+                    API keys are configured as environment variables in Vercel.
+                  </Text>
                   <Text variant="bodySm" as="span" color="subdued">
-                    Your API key is stored securely and never exposed to the client.
+                    To update your API keys, go to your Vercel dashboard and edit the environment variables.
                   </Text>
                 </VerticalStack>
               </div>

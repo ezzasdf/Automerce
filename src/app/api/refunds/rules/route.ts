@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getShopByDomain } from "@/lib/db/shops";
-import { getRefundRulesByShopId, createRefundRule } from "@/lib/db/refund-rules";
+import { getRefundRulesByShopId, createRefundRule, deleteRefundRule } from "@/lib/db/refund-rules";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
@@ -25,14 +25,14 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { shopDomain, name, conditions, actions } = body;
-
-  if (!shopDomain || !name) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
-  }
-
   try {
+    const body = await request.json();
+    const { shopDomain, name, conditions, actions } = body;
+
+    if (!shopDomain || !name) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+    }
+
     const shop = await getShopByDomain(shopDomain);
     if (!shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });
@@ -51,5 +51,28 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("Create refund rule error:", error);
     return NextResponse.json({ error: "Failed to create rule" }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams;
+  const ruleId = searchParams.get("id");
+  const shopDomain = searchParams.get("shop");
+
+  if (!ruleId || !shopDomain) {
+    return NextResponse.json({ error: "Missing rule id or shop parameter" }, { status: 400 });
+  }
+
+  try {
+    const shop = await getShopByDomain(shopDomain);
+    if (!shop) {
+      return NextResponse.json({ error: "Shop not found" }, { status: 404 });
+    }
+
+    await deleteRefundRule(ruleId);
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("Delete refund rule error:", error);
+    return NextResponse.json({ error: "Failed to delete rule" }, { status: 500 });
   }
 }

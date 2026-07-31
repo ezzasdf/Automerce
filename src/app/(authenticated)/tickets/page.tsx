@@ -15,6 +15,7 @@ import {
   Button,
   Modal,
   VerticalStack,
+  Banner,
 } from "@shopify/polaris";
 
 interface Ticket {
@@ -61,6 +62,7 @@ function TicketsContent() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -74,6 +76,7 @@ function TicketsContent() {
 
   async function fetchTickets() {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({ shop: shopDomain });
       if (statusFilter) params.set("status", statusFilter);
@@ -81,7 +84,7 @@ function TicketsContent() {
       const data = await res.json();
       setTickets(data.tickets || []);
     } catch (err) {
-      console.error("Failed to fetch tickets:", err);
+      setError("Failed to load tickets");
     } finally {
       setLoading(false);
     }
@@ -107,7 +110,7 @@ function TicketsContent() {
         await fetchTickets();
       }
     } catch (err) {
-      console.error("Failed to create ticket:", err);
+      setError("Failed to create ticket");
     } finally {
       setCreating(false);
     }
@@ -126,6 +129,14 @@ function TicketsContent() {
         onAction: () => setCreateModalOpen(true),
       }}
     >
+      {error && (
+        <div style={{ marginBottom: "16px" }}>
+          <Banner status="critical" onDismiss={() => setError(null)}>
+            {error}
+          </Banner>
+        </div>
+      )}
+
       <LegacyCard>
         <div style={{ padding: "16px" }}>
           <HorizontalStack gap="400">
@@ -159,6 +170,13 @@ function TicketsContent() {
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center" }}>
               <Spinner size="large" />
+            </div>
+          ) : filteredTickets.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
+              <Text variant="headingMd" as="h3">No tickets found</Text>
+              <Text variant="bodyMd" as="p" color="subdued">
+                {search ? "Try adjusting your search or filters." : "Create a ticket to get started with customer support."}
+              </Text>
             </div>
           ) : (
             <IndexTable
@@ -194,7 +212,7 @@ function TicketsContent() {
                     {ticket.ai_responded_at ? (
                       <Badge status="success">Responded</Badge>
                     ) : (
-                      <Badge status="info">Pending</Badge>
+                      <Badge>Awaiting</Badge>
                     )}
                   </IndexTable.Cell>
                   <IndexTable.Cell>

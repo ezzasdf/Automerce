@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getTicketById, updateTicket, getTicketMessages, addTicketMessage } from "@/lib/db/tickets";
+import { getTicketById, updateTicket, getTicketMessages } from "@/lib/db/tickets";
 
 export async function GET(
   request: NextRequest,
@@ -19,14 +19,27 @@ export async function GET(
   }
 }
 
+const ALLOWED_FIELDS = ["status", "category", "priority", "ai_response", "ai_responded_at", "human_response", "resolved_at"];
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const body = await request.json();
-
   try {
-    await updateTicket(params.id, body);
+    const body = await request.json();
+
+    const safeUpdates: Record<string, any> = {};
+    for (const key of ALLOWED_FIELDS) {
+      if (key in body) {
+        safeUpdates[key] = body[key];
+      }
+    }
+
+    if (Object.keys(safeUpdates).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
+    await updateTicket(params.id, safeUpdates);
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("Update ticket error:", error);

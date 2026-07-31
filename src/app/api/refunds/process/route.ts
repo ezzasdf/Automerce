@@ -5,38 +5,17 @@ import { getTicketById, updateTicket } from "@/lib/db/tickets";
 import { evaluateRules } from "@/lib/refunds/rule-engine";
 import { processRefund } from "@/lib/refunds/processor";
 import { createRefundLog, getRefundRulesByShopId } from "@/lib/db/refund-rules";
-
-function getShopifyClient(accessToken: string, shopDomain: string) {
-  const { shopifyApi, ApiVersion } = require("@shopify/shopify-api");
-  require("@shopify/shopify-api/adapters/node");
-  const shopify = shopifyApi({
-    apiKey: process.env.SHOPIFY_API_KEY!,
-    apiSecretKey: process.env.SHOPIFY_API_SECRET!,
-    scopes: (process.env.SHOPIFY_SCOPES || "").split(","),
-    hostName: (process.env.SHOPIFY_APP_URL || "http://localhost:3000").replace(/https?:\/\//, ""),
-    apiVersion: ApiVersion.October24,
-    isEmbeddedApp: true,
-  });
-  return new shopify.clients.Graphql({
-    session: {
-      shop: shopDomain,
-      accessToken,
-      scope: process.env.SHOPIFY_SCOPES || "",
-      isOnline: true,
-      state: "",
-    } as any,
-  });
-}
+import { getShopifyClient } from "@/lib/shopify";
 
 export async function POST(request: NextRequest) {
-  const body = await request.json();
-  const { ticketId, orderId, shopDomain, manual = false } = body;
-
-  if (!shopDomain) {
-    return NextResponse.json({ error: "Missing shopDomain" }, { status: 400 });
-  }
-
   try {
+    const body = await request.json();
+    const { ticketId, orderId, shopDomain, manual = false } = body;
+
+    if (!shopDomain) {
+      return NextResponse.json({ error: "Missing shopDomain" }, { status: 400 });
+    }
+
     const shop = await getShopByDomain(shopDomain);
     if (!shop) {
       return NextResponse.json({ error: "Shop not found" }, { status: 404 });

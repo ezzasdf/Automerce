@@ -12,6 +12,7 @@ import {
   HorizontalStack,
   Select,
   Spinner,
+  Banner,
 } from "@shopify/polaris";
 
 interface Order {
@@ -59,12 +60,14 @@ function OrdersContent() {
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   useEffect(() => {
     async function fetchOrders() {
       setLoading(true);
+      setError(null);
       try {
         const params = new URLSearchParams({ shop: shopDomain });
         if (statusFilter) params.set("status", statusFilter);
@@ -72,7 +75,7 @@ function OrdersContent() {
         const data = await res.json();
         setOrders(data.orders || []);
       } catch (err) {
-        console.error("Failed to fetch orders:", err);
+        setError("Failed to load orders");
       } finally {
         setLoading(false);
       }
@@ -92,6 +95,14 @@ function OrdersContent() {
 
   return (
     <Page title="Orders">
+      {error && (
+        <div style={{ marginBottom: "16px" }}>
+          <Banner status="critical" onDismiss={() => setError(null)}>
+            {error}
+          </Banner>
+        </div>
+      )}
+
       <LegacyCard>
         <div style={{ padding: "16px" }}>
           <HorizontalStack gap="400">
@@ -125,6 +136,13 @@ function OrdersContent() {
           {loading ? (
             <div style={{ padding: "40px", textAlign: "center" }}>
               <Spinner size="large" />
+            </div>
+          ) : filteredOrders.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center" }}>
+              <Text variant="headingMd" as="h3">No orders found</Text>
+              <Text variant="bodyMd" as="p" color="subdued">
+                {search ? "Try adjusting your search or filters." : "Orders will appear here once your store receives them."}
+              </Text>
             </div>
           ) : (
             <IndexTable
