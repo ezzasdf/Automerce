@@ -64,13 +64,29 @@ SaaS Shopify embedded app that automates customer support responses (via Claude 
 - Auto-refund vs manual escalation
 - Create/delete rules from UI
 
+### Email Integration (New)
+- Inbound email webhook receiver (`/api/webhooks/email`)
+- Supports SendGrid Inbound Parse, Mailgun Routes, Postmark Inbound, generic JSON
+- Auto-parses email headers (from, subject, in-reply-to, references)
+- Matches sender email to existing customers/orders
+- Auto-categorizes and prioritizes via AI
+- Threads replies to existing tickets via in-reply-to/references
+- Settings UI with webhook URL and configuration
+
+### Shopify Conversation Sync (New)
+- Syncs Shopify order notes and customer conversations
+- Creates tickets from Shopify order activity
+- Manual sync button in Settings
+- Sends replies as Shopify order notes
+- Reply destination shown in ticket detail ("Send via Shopify")
+
 ### Dashboard Pages
 - **Dashboard** — Stats cards (orders, open tickets, pending refunds, resolved) + recent tickets
 - **Orders** — Searchable/filterable order table
 - **Tickets** — Ticket list with create modal, category/status/priority badges, AI response status
-- **Ticket Detail** — Full conversation view, AI response generation, manual reply, refund processing, resolve
+- **Ticket Detail** — Full conversation view, AI response generation, Shopify reply, refund processing, resolve
 - **Refunds** — Tabbed view (History + Automation Rules), create/delete rules
-- **Settings** — Store info, AI config, notifications
+- **Settings** — Store info, AI config, email integration, Shopify sync, notifications
 
 ### Security (Fixed)
 - Mass-assignment protection on ticket PATCH (field allowlist)
@@ -88,7 +104,7 @@ SaaS Shopify embedded app that automates customer support responses (via Claude 
 
 ---
 
-## API Endpoints (15)
+## API Endpoints (19)
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -97,13 +113,16 @@ SaaS Shopify embedded app that automates customer support responses (via Claude 
 | `/api/webhooks/orders` | POST | Order sync webhook |
 | `/api/webhooks/refunds` | POST | Refund event webhook |
 | `/api/webhooks/gdpr` | POST | GDPR compliance webhooks |
+| `/api/webhooks/email` | POST | Inbound email webhook (SendGrid/Mailgun/Postmark) |
 | `/api/tickets` | GET/POST | List/create tickets |
 | `/api/tickets/[id]` | GET/PATCH | Get/update ticket (field allowlist) |
 | `/api/tickets/[id]/respond` | POST | Generate AI response |
+| `/api/tickets/[id]/reply` | POST | Send reply (via Shopify or internal) |
 | `/api/orders` | GET | List orders |
 | `/api/refunds/process` | POST | Process refund |
 | `/api/refunds/rules` | GET/POST/DELETE | CRUD refund rules |
 | `/api/refunds/logs` | GET | List refund history |
+| `/api/shopify/sync` | POST | Sync Shopify conversations to tickets |
 | `/api/dashboard` | GET | Dashboard stats |
 
 ---
@@ -136,10 +155,12 @@ SaaS Shopify embedded app that automates customer support responses (via Claude 
 - [ ] Place a test order on dev store → verify webhook syncs to Supabase
 - [ ] Create a test ticket → verify AI response generation (real or mock)
 - [ ] Process a test refund → verify Shopify refund created
+- [ ] Configure email forwarding (SendGrid/Mailgun) → test inbound email → ticket
+- [ ] Test Shopify conversation sync on real orders
 
-### Priority 2 — Core Features
-- [ ] Email integration — receive customer emails as tickets
-- [ ] Shopify inbox integration — read/write Shopify messages
+### Priority 2 — Core Features (Done)
+- [x] Email integration — receive customer emails as tickets
+- [x] Shopify inbox integration — read/write Shopify messages
 - [ ] Auto-response toggle — send AI replies automatically without review
 - [ ] Settings persistence — save store settings to database (currently UI only)
 - [ ] Per-shop refund policies stored in DB (currently hardcoded)

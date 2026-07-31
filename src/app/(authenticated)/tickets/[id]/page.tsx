@@ -92,16 +92,21 @@ function TicketDetailContent({ params }: { params: { id: string } }) {
     if (!reply.trim() || sendingReply) return;
     setSendingReply(true);
     try {
-      await fetch(`/api/tickets/${params.id}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/tickets/${params.id}/reply`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          human_response: reply,
-          status: "pending",
+          shopDomain,
+          message: reply,
+          sendVia: ticket?.order_id ? "shopify" : "internal",
         }),
       });
+      const data = await res.json();
       setReply("");
       await fetchTicket();
+      if (data.shopifySent) {
+        setError(null);
+      }
     } catch (err) {
       setError("Failed to send reply");
     } finally {
@@ -315,9 +320,16 @@ function TicketDetailContent({ params }: { params: { id: string } }) {
                   autoComplete="off"
                 />
                 <div style={{ marginTop: "8px" }}>
-                  <Button primary onClick={handleSendReply} loading={sendingReply} disabled={!reply.trim()}>
-                    Send Reply
-                  </Button>
+                  <HorizontalStack gap="200" align="center">
+                    <Button primary onClick={handleSendReply} loading={sendingReply} disabled={!reply.trim()}>
+                      {ticket.order_id ? "Send via Shopify" : "Send Reply"}
+                    </Button>
+                    {ticket.order_id && (
+                      <Text variant="bodySm" as="span" color="subdued">
+                        Will be sent as order note
+                      </Text>
+                    )}
+                  </HorizontalStack>
                 </div>
               </div>
             </div>
