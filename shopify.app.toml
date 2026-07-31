@@ -1,0 +1,36 @@
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration
+
+name = "Support Auto"
+client_id = "{{YOUR_API_KEY}}"
+application_url = "{{YOUR_APP_URL}}"
+embedded = true
+
+[access_scopes]
+scopes = "read_orders,write_orders,read_customers,read_content"
+
+[auth]
+redirect_urls = [
+  "{{YOUR_APP_URL}}/api/auth/callback"
+]
+
+[webhooks]
+api_version = "2025-04"
+
+[[webhooks.subscriptions]]
+topics = ["orders/create", "orders/updated", "orders/paid", "orders/fulfilled", "orders/cancelled"]
+uri = "https://{{YOUR_APP_URL}}/api/webhooks/orders"
+
+[[webhooks.subscriptions]]
+topics = ["refunds/create"]
+uri = "https://{{YOUR_APP_URL}}/api/webhooks/refunds"
+
+[[webhooks.subscriptions]]
+topics = ["customers/data-request", "customers/redact", "shop/redact"]
+uri = "https://{{YOUR_APP_URL}}/api/webhooks/gdpr"
+
+[[webhooks.subscriptions]]
+topics = ["app/uninstalled", "app/scopes_update"]
+uri = "https://{{YOUR_APP_URL}}/api/webhooks/gdpr"
+
+[build]
+automatically_update_urls_on_deploy = true
